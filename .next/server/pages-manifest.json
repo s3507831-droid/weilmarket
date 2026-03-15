@@ -1,9 +1,12 @@
 {
   "/_app": "pages/_app.js",
-  "/_error": "pages/_error.js",
-  "/_document": "pages/_document.js",
-  "/staking": "pages/staking.js",
-  "/marketplace": "pages/marketplace.js",
+  "/ai": "pages/ai.js",
   "/deploy": "pages/deploy.js",
-  "/": "pages/index.js"
+  "/dashboard": "pages/dashboard.js",
+  "/governance": "pages/governance.js",
+  "/marketplace": "pages/marketplace.js",
+  "/": "pages/index.js",
+  "/staking": "pages/staking.js",
+  "/_error": "pages/_error.js",
+  "/_document": "pages/_document.js"
 }
