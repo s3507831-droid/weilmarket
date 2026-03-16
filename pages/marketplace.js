@@ -1,17 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppletCard from '../components/AppletCard';
-import { MOCK_APPLETS } from '../lib/weil';
+import { getApplets } from '../lib/weil';
 
 const FILTERS = ['All','NLP','Image','Data','Finance','Utility'];
 
 export default function Marketplace({ wallet, onToast }) {
-  const [filter, setFilter] = useState('All');
-  const [query,  setQuery]  = useState('');
+  const [filter, setFilter]   = useState('All');
+  const [query,  setQuery]    = useState('');
+  const [applets, setApplets] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const visible = MOCK_APPLETS.filter(a => {
+  useEffect(() => {
+    setLoading(true);
+    getApplets().then(data => {
+      setApplets(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const visible = applets.filter(a => {
     const matchCat = filter === 'All' || a.category === filter.toLowerCase();
     const q = query.toLowerCase();
-    const matchQ = !q || a.name.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q) || a.category.includes(q);
+    const matchQ = !q || a.name?.toLowerCase().includes(q) || a.desc?.toLowerCase().includes(q) || a.description?.toLowerCase().includes(q) || a.category?.includes(q);
     return matchCat && matchQ;
   });
 
@@ -24,19 +34,11 @@ export default function Marketplace({ wallet, onToast }) {
         </span>
       </div>
 
-      {/* Search & filters */}
       <div style={{ display:'flex', gap:'0.75rem', flexWrap:'wrap', alignItems:'center', marginBottom:'1.5rem' }}>
-        <div style={{
-          display:'flex', alignItems:'center', gap:'0.5rem',
-          background:'var(--bg2)', border:'1px solid var(--border)',
-          borderRadius:4, padding:'0 0.75rem', flex:1, maxWidth:280,
-        }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:4, padding:'0 0.75rem', flex:1, maxWidth:280 }}>
           <span style={{ color:'var(--text3)' }}>🔮</span>
-          <input
-            value={query} onChange={e => setQuery(e.target.value)}
-            placeholder="Search the haunted market..."
-            style={{ background:'none', border:'none', outline:'none', color:'var(--text)', fontFamily:'var(--font-mono)', fontSize:'0.72rem', padding:'0.5rem 0', width:'100%' }}
-          />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search the haunted market..."
+            style={{ background:'none', border:'none', outline:'none', color:'var(--text)', fontFamily:'var(--font-mono)', fontSize:'0.72rem', padding:'0.5rem 0', width:'100%' }}/>
         </div>
         <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
           {FILTERS.map(f => (
@@ -52,12 +54,16 @@ export default function Marketplace({ wallet, onToast }) {
         </div>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))', gap:'1rem' }}>
-        {visible.length
-          ? visible.map(a => <AppletCard key={a.id} applet={a} wallet={wallet} onToast={onToast}/>)
-          : <div style={{ gridColumn:'1/-1', textAlign:'center', color:'var(--text3)', padding:'3rem', fontFamily:'var(--font-head)', fontSize:'1.2rem' }}>👻 No applets found...</div>
-        }
-      </div>
+      {loading ? (
+        <div style={{ textAlign:'center', color:'var(--text3)', padding:'3rem', fontFamily:'var(--font-head)', fontSize:'1.2rem' }}>👻 Loading applets from blockchain...</div>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))', gap:'1rem' }}>
+          {visible.length
+            ? visible.map((a,i) => <AppletCard key={a._id ?? a.id ?? i} applet={a} wallet={wallet} onToast={onToast}/>)
+            : <div style={{ gridColumn:'1/-1', textAlign:'center', color:'var(--text3)', padding:'3rem', fontFamily:'var(--font-head)', fontSize:'1.2rem' }}>👻 No applets found...</div>
+          }
+        </div>
+      )}
     </div>
   );
 }

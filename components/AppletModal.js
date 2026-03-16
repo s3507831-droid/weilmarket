@@ -1,39 +1,80 @@
 import { useState } from 'react';
-import { invokeApplet } from '../lib/weil';
+
+const BACKEND = 'https://weilmarket-backend.onrender.com';
 
 export default function AppletModal({ applet, wallet, onClose, onToast }) {
-  const [tab, setTab] = useState('info');
-  const [params, setParams] = useState('{"text": "your input here"}');
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [tab, setTab]             = useState('info');
+  const [params, setParams]       = useState('{"text": "your input here"}');
+  const [result, setResult]       = useState(null);
+  const [loading, setLoading]     = useState(false);
   const [reviewText, setReviewText] = useState('');
   const [reviewScore, setReviewScore] = useState('5');
+  const [reviews, setReviews]     = useState([
+    { text: 'Great applet, fast and reliable!', score: 5 },
+    { text: 'Works perfectly for my NLP pipeline.', score: 5 },
+    { text: 'Solid reliability, highly recommended.', score: 4 },
+  ]);
+  const [currentRating, setCurrentRating] = useState(applet.rating ?? applet.Rating ?? 0);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
+  // Get the correct ID — works for both MongoDB _id and numeric id
+  const appletId = applet._id ?? applet.id;
 
   async function handleInvoke() {
     if (!wallet) { onToast('Connect wallet first! 👛', '⚠️'); return; }
     setLoading(true);
+    setResult(null);
     try {
-      const res = await invokeApplet(applet.id, JSON.parse(params || '{}'), wallet);
-      setResult(res);
-      onToast(`✓ Invoked ${applet.name} · ${applet.price} WUSD`, '⚡');
+      let parsedParams = {};
+      try { parsedParams = JSON.parse(params || '{}'); } catch(e) {}
+
+      const res = await fetch(`${BACKEND}/api/applets/${appletId}/invoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caller: wallet, params: parsedParams }),
+      });
+      const data = await res.json();
+
+      if (data.execution || data.txHash) {
+        setResult(data);
+        onToast(`✓ Invoked ${applet.name} · ${applet.price} WUSD`, '⚡');
+      } else if (data.error) {
+        setResult({ error: data.error });
+        onToast('Error: ' + data.error, '❌');
+      } else {
+        setResult(data);
+        onToast(`✓ Invoked ${applet.name}`, '⚡');
+      }
     } catch (e) {
+      setResult({ error: e.message });
       onToast('Error: ' + e.message, '❌');
     }
     setLoading(false);
   }
 
   async function handleReview() {
-    if (!reviewText) return;
-    await new Promise(r => setTimeout(r, 400));
-    onToast(`Review submitted! Score: ${reviewScore} ⭐`, '⭐');
-    setReviewText('');
+    if (!wallet) { onToast('Connect wallet first!', '⚠️'); return; }
+    if (!reviewText) { onToast('Write a review first!', '⚠️'); return; }
+    setReviewSubmitting(true);
+    try {
+      await fetch(`${BACKEND}/api/applets/${appletId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: parseInt(reviewScore), comment: reviewText }),
+      });
+      const newScore = parseInt(reviewScore);
+      const newReview = { text: reviewText, score: newScore };
+      setReviews(prev => [newReview, ...prev]);
+      // Update displayed rating
+      const newRating = ((currentRating * reviews.length) + newScore) / (reviews.length + 1);
+      setCurrentRating(parseFloat(newRating.toFixed(1)));
+      onToast(`Review submitted! Score: ${reviewScore} ⭐`, '⭐');
+      setReviewText('');
+    } catch(e) {
+      onToast('Review failed', '❌');
+    }
+    setReviewSubmitting(false);
   }
-
-  const MOCK_REVIEWS = [
-    { text: 'Great applet, fast and reliable invocations!', score: 5 },
-    { text: 'Works perfectly for my NLP pipeline.', score: 5 },
-    { text: 'Solid reliability, highly recommended.', score: 4 },
-  ];
 
   return (
     <div
@@ -84,10 +125,10 @@ export default function AppletModal({ applet, wallet, onClose, onToast }) {
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
                 {[
-                  ['Price', applet.price + ' WUSD', 'var(--accent)'],
-                  ['Rating', '⭐ ' + applet.rating, 'var(--yellow)'],
-                  ['Invocations', applet.invokes, 'var(--green)'],
-                  ['Category', applet.category, 'var(--text2)'],
+                  ['Price',       applet.price + ' WUSD',                    'var(--accent)'],
+                  ['Rating',      '⭐ ' + currentRating,                      'var(--yellow)'],
+                  ['Invocations', applet.invokes ?? applet.executions ?? 0,   'var(--green)'],
+                  ['Category',    applet.category,                            'var(--text2)'],
                 ].map(([label, val, color]) => (
                   <div key={label} style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.85rem' }}>
                     <div style={{ fontSize: '0.6rem', color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>{label}</div>
@@ -95,9 +136,11 @@ export default function AppletModal({ applet, wallet, onClose, onToast }) {
                   </div>
                 ))}
               </div>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.65 }}>{applet.desc}</p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.65 }}>
+                {applet.desc ?? applet.description}
+              </p>
               <div style={{ marginTop: '0.85rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                {applet.badges.map(b => <span key={b} className={`badge badge-${b}`}>{b.toUpperCase()}</span>)}
+                {(applet.badges ?? ['mcp']).map(b => <span key={b} className={`badge badge-${b}`}>{b.toUpperCase()}</span>)}
               </div>
             </div>
           )}
@@ -134,14 +177,28 @@ export default function AppletModal({ applet, wallet, onClose, onToast }) {
           {/* Reviews tab */}
           {tab === 'reviews' && (
             <div>
+              {/* Current rating display */}
+              <div style={{ background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:8, padding:'1rem', marginBottom:'1rem', display:'flex', alignItems:'center', gap:'1rem' }}>
+                <div style={{ fontFamily:'var(--font-head)', fontSize:'2.5rem', color:'var(--accent)' }}>{currentRating}</div>
+                <div>
+                  <div style={{ color:'var(--yellow)', fontSize:'1rem', marginBottom:'0.2rem' }}>
+                    {'⭐'.repeat(Math.round(currentRating))}
+                  </div>
+                  <div style={{ fontSize:'0.62rem', color:'var(--text3)' }}>{reviews.length} reviews</div>
+                </div>
+              </div>
+
+              {/* Reviews list */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.25rem' }}>
-                {MOCK_REVIEWS.map((r, i) => (
+                {reviews.map((r, i) => (
                   <div key={i} style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.75rem' }}>
                     <div style={{ fontSize: '0.7rem', color: 'var(--yellow)', marginBottom: '0.3rem' }}>{'⭐'.repeat(r.score)}</div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text2)' }}>{r.text}</div>
                   </div>
                 ))}
               </div>
+
+              {/* Submit review */}
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
                 <div style={{ marginBottom: '0.75rem' }}>
                   <label className="field-label">Your Review</label>
@@ -155,13 +212,16 @@ export default function AppletModal({ applet, wallet, onClose, onToast }) {
                 </div>
                 <button
                   onClick={handleReview}
+                  disabled={reviewSubmitting}
                   style={{
-                    background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
+                    background: 'var(--accent)', color: '#fff', border: 'none',
+                    cursor: reviewSubmitting ? 'wait' : 'pointer',
                     fontFamily: 'var(--font-mono)', fontSize: '0.7rem', fontWeight: 700,
-                    padding: '0.5rem 1rem', borderRadius: 4, letterSpacing: '0.06em', textTransform: 'uppercase',
+                    padding: '0.5rem 1rem', borderRadius: 4, letterSpacing: '0.06em',
+                    textTransform: 'uppercase', opacity: reviewSubmitting ? 0.7 : 1,
                   }}
                 >
-                  Submit Review
+                  {reviewSubmitting ? '⏳ Submitting...' : '⭐ Submit Review'}
                 </button>
               </div>
             </div>
@@ -171,7 +231,7 @@ export default function AppletModal({ applet, wallet, onClose, onToast }) {
       <style>{`
         @keyframes modalIn {
           from { opacity: 0; transform: scale(0.9) translateY(20px); }
-          to   { opacity: 1; transform: scale(1)   translateY(0); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
         }
       `}</style>
     </div>
