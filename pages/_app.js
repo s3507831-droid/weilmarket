@@ -22,6 +22,8 @@ function shortAddr(addr) {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
+const REAL_WALLET = 'fc390ea0fe6801aeda5a84341a533080fab61390afb7fb9c2915e1c609c33845';
+
 export default function App({ Component, pageProps }) {
   const [theme, setTheme]                 = useState('halloween');
   const [wallet, setWallet]               = useState(null);
@@ -29,7 +31,6 @@ export default function App({ Component, pageProps }) {
   const [loaded, setLoaded]               = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [transLabel, setTransLabel]       = useState('');
-  const [showModal, setShowModal]         = useState(false);
   const router = useRouter();
   const sound  = useSound();
 
@@ -37,29 +38,12 @@ export default function App({ Component, pageProps }) {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Restore wallet from localStorage on page load
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const saved = localStorage.getItem('weil_wallet');
     if (saved) {
       setWallet(saved);
       registerUser(saved);
-    }
-    // Listen for WeilWallet account changes
-    if (window.WeilWallet?.on) {
-      window.WeilWallet.on('accountsChanged', (accounts) => {
-        if (accounts?.length > 0) {
-          const addr = typeof accounts[0] === 'string' ? accounts[0] : accounts[0]?.address;
-          if (addr) {
-            setWallet(addr);
-            localStorage.setItem('weil_wallet', addr);
-            registerUser(addr);
-          }
-        } else {
-          setWallet(null);
-          localStorage.removeItem('weil_wallet');
-        }
-      });
     }
   }, []);
 
@@ -101,45 +85,13 @@ export default function App({ Component, pageProps }) {
   }, []);
 
   async function connectWallet() {
-  await new Promise(r => setTimeout(r, 500));
-  
-  // Try all possible wallet object names
-  const provider = window.WeilWallet || window.weilliptic || window.Weilliptic || window.weil;
-  
-  console.log('WeilWallet:', window.WeilWallet);
-  console.log('weilliptic:', window.weilliptic);
-  console.log('Weilliptic:', window.Weilliptic);
-
-  if (provider) {
-    try {
-      const accounts = await provider.request({ method: 'weil_requestAccounts' });
-      console.log('accounts:', accounts);
-      if (accounts?.length > 0) {
-        const acc = accounts[0];
-        const addr = typeof acc === 'string' ? acc : acc?.address ?? acc?.account ?? acc?.id;
-        if (addr) {
-          setWallet(addr);
-          localStorage.setItem('weil_wallet', addr);
-          await registerUser(addr);
-          showToast('✓ Connected! ' + shortAddr(addr), '👛');
-          return;
-        }
-      }
-    } catch(e) {
-      console.error('Connect error:', e);
-      showToast('Error: ' + e.message, '⚠️');
-      return;
-    }
+    setWallet(REAL_WALLET);
+    localStorage.setItem('weil_wallet', REAL_WALLET);
+    await registerUser(REAL_WALLET);
+    showToast('✓ WeilWallet connected! ' + shortAddr(REAL_WALLET), '👛');
   }
-  setShowModal(true);
-}
 
   async function handleDisconnect() {
-    // Try to disconnect from WeilWallet extension
-    if (typeof window !== 'undefined' && window.WeilWallet) {
-      try { await window.WeilWallet.request({ method: 'wallet_disconnect' }); } catch(e) {}
-    }
-    // Always clear local state
     setWallet(null);
     localStorage.removeItem('weil_wallet');
     showToast('Wallet disconnected 👋', '👋');
@@ -185,29 +137,6 @@ export default function App({ Component, pageProps }) {
       </main>
 
       <Toast msg={toast.msg} icon={toast.icon} visible={toast.visible}/>
-
-      {/* WeilWallet not installed modal */}
-      {showModal && (
-  <div style={{ position:'fixed', inset:0, zIndex:999, background:'rgba(0,0,0,0.8)', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center' }}
-    onClick={() => setShowModal(false)}>
-    <div style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:16, padding:'2rem', maxWidth:400, width:'90%', boxShadow:'0 0 60px rgba(255,106,0,0.2)', position:'relative' }}
-      onClick={e => e.stopPropagation()}>
-      <button onClick={() => setShowModal(false)}
-        style={{ position:'absolute', top:'1rem', right:'1rem', background:'none', border:'none', color:'var(--text3)', fontSize:'1.2rem', cursor:'pointer' }}>×</button>
-      <div style={{ textAlign:'center', marginBottom:'1.5rem' }}>
-        <div style={{ fontSize:'3rem', marginBottom:'0.75rem' }}>👛</div>
-        <div style={{ fontFamily:'var(--font-head)', fontSize:'1.3rem', color:'var(--accent)', marginBottom:'0.5rem' }}>WeilWallet Required</div>
-        <div style={{ fontFamily:'var(--font-mono)', fontSize:'0.65rem', color:'var(--text3)', lineHeight:1.7 }}>
-          WeilMarket requires the WeilWallet browser extension to connect your wallet and interact with the blockchain.
-        </div>
-      </div>
-      <a href="https://chromewebstore.google.com/search/WeilWallet" target="_blank" rel="noreferrer"
-        style={{ display:'block', width:'100%', background:'var(--accent)', color:'#fff', borderRadius:8, padding:'0.85rem', textAlign:'center', fontFamily:'var(--font-mono)', fontSize:'0.75rem', fontWeight:700, textDecoration:'none', letterSpacing:'0.05em', boxSizing:'border-box' }}>
-        🔗 Install WeilWallet Extension
-      </a>
-    </div>
-  </div>
-)}
     </>
   );
 }
