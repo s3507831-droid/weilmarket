@@ -101,29 +101,33 @@ export default function App({ Component, pageProps }) {
   }, []);
 
   async function connectWallet() {
-  // Wait for extension to load
-  let weilWallet = window.WeilWallet;
-  if (!weilWallet) {
-    await new Promise(r => setTimeout(r, 1000));
-    weilWallet = window.WeilWallet;
-  }
+  await new Promise(r => setTimeout(r, 500));
+  
+  // Try all possible wallet object names
+  const provider = window.WeilWallet || window.weilliptic || window.Weilliptic || window.weil;
+  
+  console.log('WeilWallet:', window.WeilWallet);
+  console.log('weilliptic:', window.weilliptic);
+  console.log('Weilliptic:', window.Weilliptic);
 
-  if (weilWallet) {
+  if (provider) {
     try {
-      const accounts = await weilWallet.request({ method: 'weil_requestAccounts' });
+      const accounts = await provider.request({ method: 'weil_requestAccounts' });
+      console.log('accounts:', accounts);
       if (accounts?.length > 0) {
-        const addr = typeof accounts[0] === 'string' ? accounts[0] : accounts[0]?.address ?? accounts[0]?.account ?? accounts[0]?.id;
+        const acc = accounts[0];
+        const addr = typeof acc === 'string' ? acc : acc?.address ?? acc?.account ?? acc?.id;
         if (addr) {
           setWallet(addr);
           localStorage.setItem('weil_wallet', addr);
           await registerUser(addr);
-          showToast('✓ WeilWallet connected! ' + shortAddr(addr), '👛');
+          showToast('✓ Connected! ' + shortAddr(addr), '👛');
           return;
         }
       }
     } catch(e) {
-      console.warn('WeilWallet error:', e);
-      showToast('Connection failed: ' + e.message, '⚠️');
+      console.error('Connect error:', e);
+      showToast('Error: ' + e.message, '⚠️');
       return;
     }
   }
