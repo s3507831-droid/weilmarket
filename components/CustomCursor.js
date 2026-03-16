@@ -1,78 +1,66 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-export default function CustomCursor({ sound }) {
-  const cursorRef  = useRef(null);
-  const trailerRef = useRef(null);
+export default function CustomCursor() {
+  const [pos, setPos] = useState({ x: -100, y: -100 });
+  const [trail, setTrail] = useState({ x: -100, y: -100 });
+  const trailRef = useRef({ x: -100, y: -100 });
+  const rafRef = useRef(null);
 
   useEffect(() => {
-    const cursor  = cursorRef.current;
-    const trailer = trailerRef.current;
-    if (!cursor || !trailer) return;
-
-    let mouseX = 0, mouseY = 0;
-    let trailerX = 0, trailerY = 0;
-
     const onMove = (e) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
-      cursor.style.left = mouseX + 'px';
-      cursor.style.top  = mouseY + 'px';
+      setPos({ x: e.clientX, y: e.clientY });
     };
+    window.addEventListener('mousemove', onMove);
 
     const animate = () => {
-      trailerX += (mouseX - trailerX) * 0.15;
-      trailerY += (mouseY - trailerY) * 0.15;
-      trailer.style.left = trailerX + 'px';
-      trailer.style.top  = trailerY + 'px';
-      requestAnimationFrame(animate);
+      trailRef.current.x += (pos.x - trailRef.current.x) * 0.12;
+      trailRef.current.y += (pos.y - trailRef.current.y) * 0.12;
+      setTrail({ x: trailRef.current.x, y: trailRef.current.y });
+      rafRef.current = requestAnimationFrame(animate);
     };
+    rafRef.current = requestAnimationFrame(animate);
 
-    const onEnter = () => cursor.style.transform = 'translate(-50%,-50%) scale(1.5)';
-    const onLeave = () => cursor.style.transform = 'translate(-50%,-50%) scale(1)';
-
-    document.addEventListener('mousemove', onMove);
-    document.querySelectorAll('button, a, [role="button"]').forEach(el => {
-      el.addEventListener('mouseenter', onEnter);
-      el.addEventListener('mouseleave', onLeave);
-    });
-
-    animate();
-    return () => document.removeEventListener('mousemove', onMove);
-  }, []);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [pos.x, pos.y]);
 
   return (
     <>
       <style>{`
-        * { cursor: none !important; }
+        html, body, * { cursor: none !important; }
       `}</style>
 
-      {/* Ghost cursor */}
-      <div ref={cursorRef} style={{
+      {/* Main ghost cursor */}
+      <div style={{
         position: 'fixed',
-        left: 0, top: 0,
-        width: 28, height: 28,
+        left: pos.x,
+        top: pos.y,
         transform: 'translate(-50%, -50%)',
         pointerEvents: 'none',
-        zIndex: 99999,
-        fontSize: '1.4rem',
+        zIndex: 2147483647,
+        fontSize: '1.8rem',
         lineHeight: 1,
-        transition: 'transform 0.15s ease',
         userSelect: 'none',
-        filter: 'drop-shadow(0 0 6px rgba(255,106,0,0.8))',
+        filter: 'drop-shadow(0 0 8px rgba(255,106,0,0.9))',
+        transition: 'transform 0.1s ease',
       }}>
         👻
       </div>
 
-      {/* Trailing glow */}
-      <div ref={trailerRef} style={{
+      {/* Orange glow trail */}
+      <div style={{
         position: 'fixed',
-        left: 0, top: 0,
-        width: 20, height: 20,
+        left: trail.x,
+        top: trail.y,
         transform: 'translate(-50%, -50%)',
         pointerEvents: 'none',
-        zIndex: 99998,
+        zIndex: 2147483646,
+        width: 24,
+        height: 24,
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(255,106,0,0.3) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(255,106,0,0.5) 0%, transparent 70%)',
         userSelect: 'none',
       }}/>
     </>
